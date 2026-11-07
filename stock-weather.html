@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>주식 날씨</title>
+<style>
+  :root {
+    --bg1: #1e1e2f; --bg2: #4a4a6a;
+    --card: rgba(255,255,255,0.14); --border: rgba(255,255,255,0.25);
+    --text: #fff; --sub: rgba(255,255,255,0.75);
+    --up: rgba(255,110,80,0.55); --down: rgba(80,160,255,0.55);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Pretendard", "Malgun Gothic", system-ui, sans-serif;
+    min-height: 100vh; color: var(--text); padding: 24px 16px 48px;
+    background: linear-gradient(160deg, var(--bg1), var(--bg2));
+    transition: background 0.8s;
+  }
+  body.sunny  { --bg1: #4a90e2; --bg2: #87c3ff; }
+  body.cloudy { --bg1: #5d6d7e; --bg2: #9aa9b8; }
+  body.rain   { --bg1: #2c3e50; --bg2: #4f6a85; }
+
+  .app { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 20px;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  }
+  h2 { font-size: 14px; font-weight: 600; color: var(--sub); margin-bottom: 12px; }
+
+  /* 종목 탭 */
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tabs button {
+    padding: 10px 18px; border-radius: 999px; border: 1px solid var(--border);
+    background: rgba(255,255,255,0.15); color: var(--text); font-size: 15px; cursor: pointer;
+  }
+  .tabs button:hover { background: rgba(255,255,255,0.28); }
+  .tabs button.on { background: rgba(255,255,255,0.9); color: #222; font-weight: 600; }
+
+  /* 요약 */
+  .hero { text-align: center; padding: 28px 20px; }
+  .hero .name { font-size: 22px; font-weight: 600; }
+  .hero .sub { color: var(--sub); font-size: 14px; margin-top: 4px; }
+  .hero .icon { font-size: 80px; line-height: 1.2; margin: 8px 0; }
+  .hero .price { font-size: 52px; font-weight: 300; line-height: 1.1; }
+  .hero .desc { font-size: 20px; margin-top: 6px; }
+  .cmp { display: inline-block; margin-top: 12px; padding: 6px 14px; border-radius: 999px; font-weight: 600; }
+  .cmp.up { background: var(--up); } .cmp.down { background: var(--down); } .cmp.same { background: rgba(255,255,255,0.22); }
+  .hero .note { font-size: 13px; color: var(--sub); margin-top: 8px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; }
+  .stats .label { font-size: 12px; color: var(--sub); }
+  .stats .value { font-size: 17px; font-weight: 600; margin-top: 4px; }
+
+  /* 달력 */
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .cal .dow { text-align: center; font-size: 12px; color: var(--sub); padding-bottom: 4px; }
+  .cal .dow.sun { color: #ffb3b3; } .cal .dow.sat { color: #b3d4ff; }
+  .cell {
+    min-height: 78px; border-radius: 12px; padding: 6px 4px; text-align: center;
+    background: rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  .cell .d { font-size: 12px; color: var(--sub); align-self: flex-start; padding-left: 4px; }
+  .cell .i { font-size: 26px; line-height: 1.1; }
+  .cell .p { font-size: 12px; font-weight: 700; }
+  .cell.trade { background: rgba(255,255,255,0.16); cursor: pointer; }
+  .cell.trade:hover, .cell.sel { outline: 2px solid rgba(255,255,255,0.7); }
+  .cell.up .p { color: #ffb199; } .cell.down .p { color: #9fd0ff; }
+  .cell.off .i, .cell.future .i { font-size: 16px; opacity: 0.5; margin-top: 6px; }
+  .cell.off .t, .cell.future .t { font-size: 10px; color: var(--sub); }
+  .cell.empty { background: transparent; }
+
+  /* 일별 상세 */
+  .day { display: grid; grid-template-columns: 70px 40px 1fr auto; gap: 10px; align-items: center; padding: 12px 6px; }
+  .day + .day { border-top: 1px solid rgba(255,255,255,0.15); }
+  .day .date { font-weight: 600; }
+  .day .i { font-size: 28px; text-align: center; }
+  .day .w { font-size: 15px; }
+  .day .w small { display: block; color: var(--sub); font-size: 12px; margin-top: 2px; }
+  .day .chg { text-align: right; font-weight: 700; }
+  .day .chg small { display: block; font-weight: 400; color: var(--sub); font-size: 12px; }
+  .day.sel { background: rgba(255,255,255,0.1); border-radius: 12px; }
+
+  /* 범례 */
+  .legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; font-size: 13px; }
+  .legend div { display: flex; gap: 8px; align-items: center; }
+  .legend .li { font-size: 20px; width: 26px; text-align: center; }
+  .legend-note { font-size: 12px; color: var(--sub); margin-top: 12px; line-height: 1.6; }
+
+  .footer { text-align: center; font-size: 12px; color: var(--sub); line-height: 1.6; }
+  .footer a { color: inherit; }
+
+  @media (max-width: 520px) {
+    .stats { grid-template-columns: repeat(2, 1fr); row-gap: 16px; }
+    .cell { min-height: 64px; } .cell .i { font-size: 20px; } .cell .p { font-size: 10px; }
+    .hero .price { font-size: 42px; }
+    .day { grid-template-columns: 56px 32px 1fr auto; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="tabs" id="tabs"></div>
+  <div id="hero" class="card hero"></div>
+  <div id="stats" class="card stats"></div>
+  <div class="card"><h2>📅 2026년 11월 주식 날씨 달력</h2><div id="cal" class="cal"></div></div>
+  <div class="card"><h2>📋 일별 날씨 상세</h2><div id="days"></div></div>
+  <div class="card">
+    <h2>🧭 날씨 읽는 법 (전일 종가 대비 등락률)</h2>
+    <div class="legend" id="legend"></div>
+    <div class="legend-note">
+      🌡 <b>기온</b> = 등락률 (1% = 1°) · 💨 <b>바람</b> = 하루 변동폭 (고가−저가)/전일종가 · 💧 <b>습도</b> = 거래량 (10월 평균 = 50%)
+    </div>
+  </div>
+  <div class="footer">
+    <span id="src"></span><br>
+    재미로 보는 시각화이며 투자 조언이 아닙니다 · <a href="index.html">← 진짜 날씨 보기</a>
+  </div>
+</div>
+
+<script>
+// ── 데이터 (Yahoo Finance 일봉, 원) ──
+// base: 10월 마지막 거래일 종가 / octAvgVolume: 10/6~10/30 18거래일 평균 거래량
+const STOCKS = {
+  samsung: {
+    name: "삼성전자", code: "005930", asOf: "2026-11-06",
+    base: 225000, octAvgVolume: 18694401,
+    data: [
+      { date: "2026-11-02", open: 219000, high: 232000, low: 217000, close: 229000, volume: 14537981 },
+      { date: "2026-11-03", open: 220500, high: 223000, low: 217000, close: 219500, volume: 13391670 },
+      { date: "2026-11-04", open: 226500, high: 228000, low: 208000, close: 218000, volume: 22248738 },
+      { date: "2026-11-05", open: 213000, high: 213500, low: 199800, close: 201500, volume: 24657743 },
+      { date: "2026-11-06", open: 180000, high: 196500, low: 179200, close: 188700, volume: 35516270 },
+    ],
+  },
+  kakao: {
+    name: "카카오", code: "035720", asOf: "2026-11-06",
+    base: 29450, octAvgVolume: 1411457,
+    data: [
+      { date: "2026-11-02", open: 29000, high: 29900, low: 28700, close: 29700, volume: 831554 },
+      { date: "2026-11-03", open: 29450, high: 29800, low: 28600, close: 28800, volume: 967420 },
+      { date: "2026-11-04", open: 28950, high: 29200, low: 28400, close: 29100, volume: 1596444 },
+      { date: "2026-11-05", open: 30200, high: 32450, low: 30150, close: 32200, volume: 5009583 },
+      { date: "2026-11-06", open: 30650, high: 33000, low: 30500, close: 32300, volume: 3707371 },
+    ],
+  },
+};
+
+// ── 등락률 → 날씨 ──
+const SCALE = [
+  { min:  3,   icon: "☀️", name: "쾌청",      theme: "sunny",  range: "+3% 이상" },
+  { min:  1,   icon: "🌤️", name: "맑음",      theme: "sunny",  range: "+1% ~ +3%" },
+  { min:  0,   icon: "⛅", name: "구름 조금", theme: "cloudy", range: "0% ~ +1%" },
+  { min: -1,   icon: "☁️", name: "흐림",      theme: "cloudy", range: "−1% ~ 0%" },
+  { min: -3,   icon: "🌧️", name: "비",        theme: "rain",   range: "−3% ~ −1%" },
+  { min: -5,   icon: "⛈️", name: "뇌우",      theme: "storm",  range: "−5% ~ −3%" },
+  { min: -Infinity, icon: "🌪️", name: "폭풍",  theme: "storm",  range: "−5% 이하" },
+];
+const weatherOf = (pct) => SCALE.find(s => pct >= s.min);
+
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+const won = (n) => n.toLocaleString("ko-KR") + "원";
+const sign = (n, d = 2) => (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(d);
+const $ = (id) => document.getElementById(id);
+
+function render(key) {
+  const s = STOCKS[key];
+  document.title = `${s.name} 주식 날씨`;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.key === key));
+
+  // 일별 계산
+  let prev = s.base;
+  const days = s.data.map(d => {
+    const pct = (d.close - prev) / prev * 100;
+    const r = {
+      ...d, prev, pct,
+      wind: (d.high - d.low) / prev * 100,
+      humid: Math.min(100, Math.round(d.volume / s.octAvgVolume * 50)),
+      gap: (d.open - prev) / prev * 100,
+      w: weatherOf(pct),
+    };
+    prev = d.close;
+    return r;
+  });
+  const byDate = Object.fromEntries(days.map(d => [d.date, d]));
+
+  // 월간 요약
+  const last = days[days.length - 1];
+  const monthPct = (last.close - s.base) / s.base * 100;
+  const monthW = weatherOf(monthPct / 2);   // 누적치라 절반으로 환산해 한 달 '평균 날씨'로
+  const monthHigh = Math.max(...days.map(d => d.high)), monthLow = Math.min(...days.map(d => d.low));
+  const upDays = days.filter(d => d.pct > 0).length;
+  document.body.className = monthW.theme === "storm" ? "" : monthW.theme;
+
+  const diff = Math.round(last.pct);
+  $("hero").innerHTML = `
+    <div class="name">${s.name} <small style="font-weight:400;color:var(--sub)">${s.code}</small></div>
+    <div class="sub">2026년 11월 · ${days.length}거래일 경과 (${s.asOf.slice(5).replace("-", "/")} 종가 기준)</div>
+    <div class="icon">${monthW.icon}</div>
+    <div class="price">${won(last.close)}</div>
+    <div class="desc">11월 날씨: ${monthW.name} · 월초 대비 ${sign(monthPct, 1)}%</div>
+    <span class="cmp ${diff > 0 ? "up" : diff < 0 ? "down" : "same"}">
+      ${diff === 0 ? "어제와 비슷해요" : `어제보다 ${Math.abs(diff)}° ${diff > 0 ? "따뜻해요 ▲" : "추워요 ▼"}`}
+      (${sign(last.pct)}%)
+    </span>
+    <div class="note">10월 말 ${won(s.base)} → 지금 ${won(last.close)} · 맑은 날 ${upDays}일 / 궂은 날 ${days.length - upDays}일</div>
+  `;
+
+  // 통계
+  const maxWind = days.reduce((a, b) => b.wind > a.wind ? b : a);
+  const lastUp = last.pct >= 0;
+  let streak = 0;
+  for (let i = days.length - 1; i >= 0 && (days[i].pct >= 0) === lastUp; i--) streak++;
+  $("stats").innerHTML = `
+    <div><div class="label">11월 최고가</div><div class="value">${won(monthHigh)}</div></div>
+    <div><div class="label">11월 최저가</div><div class="value">${won(monthLow)}</div></div>
+    <div><div class="label">가장 센 바람</div><div class="value">${+maxWind.date.slice(8)}일 ${maxWind.wind.toFixed(1)}m/s</div></div>
+    <div><div class="label">연속 ${lastUp ? "맑은" : "궂은"} 날</div><div class="value">${streak}일째</div></div>
+  `;
+
+  // 달력
+  let cal = DOW.map((d, i) => `<div class="dow ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${d}</div>`).join("");
+  const first = new Date(2026, 10, 1).getDay();
+  for (let i = 0; i < first; i++) cal += `<div class="cell empty"></div>`;
+  for (let day = 1; day <= 30; day++) {
+    const date = `2026-11-${String(day).padStart(2, "0")}`;
+    const dow = new Date(2026, 10, day).getDay();
+    const d = byDate[date];
+    if (d) {
+      cal += `<div class="cell trade ${d.pct >= 0 ? "up" : "down"}" data-date="${date}" title="${d.w.name} ${sign(d.pct)}%">
+        <span class="d">${day}</span><span class="i">${d.w.icon}</span><span class="p">${sign(d.pct, 1)}%</span></div>`;
+    } else if (dow === 0 || dow === 6) {
+      cal += `<div class="cell off"><span class="d">${day}</span><span class="i">💤</span><span class="t">휴장</span></div>`;
+    } else {
+      cal += `<div class="cell future"><span class="d">${day}</span><span class="i">❔</span><span class="t">예보 전</span></div>`;
+    }
+  }
+  $("cal").innerHTML = cal;
+
+  // 일별 상세
+  $("days").innerHTML = days.map(d => `
+    <div class="day" id="d-${d.date}">
+      <div class="date">${+d.date.slice(5, 7)}/${+d.date.slice(8)} (${DOW[new Date(d.date + "T00:00").getDay()]})</div>
+      <div class="i">${d.w.icon}</div>
+      <div class="w">${d.w.name} · ${sign(d.pct, 1)}°
+        <small>💨 바람 ${d.wind.toFixed(1)}m/s · 💧 습도 ${d.humid}% · 시가 ${sign(d.gap, 1)}%로 출발</small>
+      </div>
+      <div class="chg" style="color:${d.pct >= 0 ? "#ffb199" : "#9fd0ff"}">${won(d.close)}
+        <small>${d.pct >= 0 ? "▲" : "▼"} ${Math.abs(d.close - d.prev).toLocaleString()} (${sign(d.pct)}%)</small>
+      </div>
+    </div>`).join("");
+
+  $("src").textContent = `데이터: Yahoo Finance (${s.code}.KS) · ${s.asOf} 종가 기준`;
+  try { localStorage.setItem("stockWeather", key); } catch {}
+  history.replaceState(null, "", "#" + key);
+}
+
+// 탭
+$("tabs").innerHTML = Object.entries(STOCKS)
+  .map(([k, s]) => `<button data-key="${k}">${s.name}</button>`).join("");
+$("tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (b) render(b.dataset.key);
+});
+
+// 달력 클릭 → 상세 강조
+$("cal").addEventListener("click", (e) => {
+  const cell = e.target.closest(".cell.trade");
+  if (!cell) return;
+  document.querySelectorAll(".sel").forEach(el => el.classList.remove("sel"));
+  cell.classList.add("sel");
+  const row = $("d-" + cell.dataset.date);
+  row.classList.add("sel");
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+});
+
+// 범례
+$("legend").innerHTML = SCALE.map(s => `<div><span class="li">${s.icon}</span><span><b>${s.name}</b> ${s.range}</span></div>`).join("");
+
+// 시작: 주소의 #kakao / #samsung → 마지막으로 본 종목 → 삼성전자
+let start = location.hash.slice(1);
+if (!STOCKS[start]) { try { start = localStorage.getItem("stockWeather"); } catch {} }
+render(STOCKS[start] ? start : "samsung");
+</script>
+</body>
+</html>
